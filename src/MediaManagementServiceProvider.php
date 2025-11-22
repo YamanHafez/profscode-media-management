@@ -1,6 +1,6 @@
 <?php
 
-namespace Profscode\Translatable;
+namespace Profscode\MediaManagement;
 
 use Illuminate\Support\ServiceProvider;
 

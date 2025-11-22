@@ -1,12 +1,8 @@
 <?php
 
-namespace Profscode\Translatable;
+namespace Profscode\MediaManagement;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Profscode\Translatable\Models\ProfscodeTranslate;
 
 trait MediaManagement
 {
