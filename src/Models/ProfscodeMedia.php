@@ -1,8 +1,9 @@
 <?php
 
-namespace Profscode\Translatable\Models;
+namespace Profscode\MediaManagement\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class ProfscodeMedia extends Model
 {
@@ -20,8 +21,38 @@ class ProfscodeMedia extends Model
         'conversions',
     ];
 
-    public function translatable()
+    public function media()
     {
         return $this->morphTo();
     }
+    public function getUrl($thumb = null)
+    {
+        $disk = $this->disk;
+        $modelType = $this->model_type;
+        $modelId = $this->model_id;
+        $collection = $this->collection;
+
+        $conversions = json_decode($this->conversions, true);
+        if (!$thumb) {
+            return Storage::disk($disk)->url(
+                "media/{$modelType}/{$modelId}/{$collection}/{$this->name}"
+            );
+        }
+        if (isset($conversions['items'][$thumb])) {
+            if (isset($conversions['items'][$thumb]['webp'])) {
+                return Storage::disk($disk)->url(
+                    $conversions['items'][$thumb]['webp']
+                );
+            }
+            if (isset($conversions['items'][$thumb]['original'])) {
+                return Storage::disk($disk)->url(
+                    $conversions['items'][$thumb]['original']
+                );
+            }
+        }
+        return Storage::disk($disk)->url(
+            "media/{$modelType}/{$modelId}/{$collection}/{$this->name}"
+        );
+    }
+
 }
