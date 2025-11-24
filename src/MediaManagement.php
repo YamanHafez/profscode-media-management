@@ -93,27 +93,123 @@ trait MediaManagement
             ]),
         ]);
     }
+    public function addMedia(
+        $fileSource,
+        string $collection = "default",
+        array $conversions = ["admin_panel" => ["width" => 100, "height" => 100, "webp" => true]]
+    ) {
+        if ($fileSource instanceof \Illuminate\Http\UploadedFile) {
+            $file = $fileSource;
+
+        } elseif (is_string($fileSource) && file_exists($fileSource)) {
+
+            $originalName = basename($fileSource);
+            $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+
+            $file = new \Illuminate\Http\UploadedFile(
+                $fileSource,
+                $originalName,
+                mime_content_type($fileSource),
+                null,
+                true
+            );
+
+        } else {
+            return null;
+        }
+
+        $originalName = $file->getClientOriginalName();
+        $extension = strtolower($file->getClientOriginalExtension());
+        $mimeType = $file->getClientMimeType();
+        $disk = $this->mediaDisk ?? config('filesystems.default');
+        $modelType = class_basename($this);
+        $modelId = $this->id;
+
+        $webpSupported = ['jpg', 'jpeg', 'png'];
+
+        $storedName = uniqid() . "." . $extension;
+
+        $file->storeAs("media/{$modelType}/{$modelId}/{$collection}", $storedName, $disk);
+
+        $originalWebpPath = null;
+        if (in_array($extension, $webpSupported)) {
+            $sourceOriginal = $this->createImageFromFile($file->getRealPath(), $extension);
+            if ($sourceOriginal) {
+                $originalWebpName = uniqid() . ".webp";
+                $originalWebpPath = "media/{$modelType}/{$modelId}/{$collection}/" . $originalWebpName;
+                $this->saveWebpToDisk($sourceOriginal, $originalWebpPath, $disk);
+                imagedestroy($sourceOriginal);
+            }
+        }
+
+        $storedConversions = [];
+
+        foreach ($conversions as $key => $config) {
+
+            $width = $config['width'] ?? null;
+            $height = $config['height'] ?? null;
+            $convertToWebp = $config['webp'] ?? false;
+
+            $conversionBaseName = $key . "_" . $storedName;
+            $conversionPath = "media/{$modelType}/{$modelId}/{$collection}/conversions/" . $conversionBaseName;
+
+            $source = $this->createImageFromFile($file->getRealPath(), $extension);
+            if (!$source) {
+                continue;
+            }
+
+            $resized = $this->resizeImage($source, $width, $height);
+
+            $this->saveImageToDisk($resized, $extension, $conversionPath, $disk);
+
+            if ($convertToWebp && in_array($extension, $webpSupported)) {
+                $webpName = $key . "_" . pathinfo($storedName, PATHINFO_FILENAME) . ".webp";
+                $webpPath = "media/{$modelType}/{$modelId}/{$collection}/conversions/" . $webpName;
+
+                $this->saveWebpToDisk($resized, $webpPath, $disk);
+
+                $storedConversions[$key]['webp'] = $webpPath;
+            }
+
+            $storedConversions[$key]['original'] = $conversionPath;
+
+            imagedestroy($source);
+            imagedestroy($resized);
+        }
+
+        return $this->media()->create([
+            'model_id' => $modelId,
+            'model_type' => $modelType,
+            'collection' => $collection,
+            'original_name' => $originalName,
+            'name' => $storedName,
+            'mime_type' => $mimeType,
+            'disk' => $disk,
+            'size' => $file->getSize(),
+            'conversions' => json_encode([
+                'original_webp' => $originalWebpPath,
+                'items' => $storedConversions
+            ]),
+        ]);
+    }
+
     public function addMediaFromUrl(
         string $file_url,
         string $collection = "default",
         array $conversions = ["admin_panel" => ["width" => 100, "height" => 100, "webp" => true]]
     ) {
-        // 1. URL'den dosyayı indir
         $contents = file_get_contents($file_url);
 
         if (!$contents) {
             return null;
         }
 
-        // 2. Geçici dosya oluştur
         $tmpPath = tempnam(sys_get_temp_dir(), 'media_');
         file_put_contents($tmpPath, $contents);
 
-        // Dosya adı ve uzantıyı URL'den çıkar
         $originalName = basename(parse_url($file_url, PHP_URL_PATH));
         $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 
-        // 3. UploadedFile nesnesine dönüştür
         $file = new UploadedFile(
             $tmpPath,
             $originalName,
@@ -122,7 +218,6 @@ trait MediaManagement
             true
         );
 
-        // Buradan sonrası addMediaFromRequest ile aynı
 
         $mimeType = $file->getClientMimeType();
         $disk = $this->mediaDisk ?? 'public';

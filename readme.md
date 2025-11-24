@@ -8,7 +8,7 @@ It stores files in a model-based directory structure, generates conversions (thu
 ## Installation
 
 ```
-compoer require profscode/media-management
+composer require profscode/media-management
 ```
 
 ### 1. Use Trait in Your Model
