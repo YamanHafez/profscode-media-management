@@ -28,7 +28,7 @@ class ProfscodeMedia extends Model
     public function getUrl($thumb = null)
     {
         $disk = $this->disk;
-        $modelType = $this->model_type;
+        $modelType = class_basename($this->model_type);
         $modelId = $this->model_id;
         $collection = $this->collection;
 
@@ -54,5 +54,54 @@ class ProfscodeMedia extends Model
             "media/{$modelType}/{$modelId}/{$collection}/{$this->name}"
         );
     }
+    protected static function booted()
+    {
+        static::deleting(function ($media) {
+
+            $disk = $media->disk;
+            $modelType = class_basename($media->model_type);
+            $modelId = $media->model_id;
+            $collection = $media->collection;
+
+            $originalPath = "media/{$modelType}/{$modelId}/{$collection}/{$media->name}";
+            Storage::disk($disk)->delete($originalPath);
+
+            $conversions = json_decode($media->conversions, true);
+
+            if (!empty($conversions['items'])) {
+                foreach ($conversions['items'] as $item) {
+
+                    if (isset($item['original'])) {
+                        Storage::disk($disk)->delete($item['original']);
+                    }
+
+                    if (isset($item['webp'])) {
+                        Storage::disk($disk)->delete($item['webp']);
+                    }
+                }
+            }
+
+            if (!empty($conversions['original_webp'])) {
+                Storage::disk($disk)->delete($conversions['original_webp']);
+            }
+
+            $paths = [
+                "media/{$modelType}/{$modelId}/{$collection}/conversions",
+                "media/{$modelType}/{$modelId}/{$collection}",
+                "media/{$modelType}/{$modelId}",
+                "media/{$modelType}",
+            ];
+
+            foreach ($paths as $path) {
+                if (
+                    empty(Storage::disk($disk)->files($path)) &&
+                    empty(Storage::disk($disk)->directories($path))
+                ) {
+                    Storage::disk($disk)->deleteDirectory($path);
+                }
+            }
+        });
+    }
+
 
 }
